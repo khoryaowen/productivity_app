@@ -1,0 +1,176 @@
+/* ─── CSS Variables ─────────────────────────────── */
+:root {
+  --bg: #f5f5f5;
+  --surface: #ffffff;
+  --surface-2: #eaeaea;
+  --text: #1a1a1a;
+  --text-muted: #666666;
+  --accent: #4f46e5;
+  --accent-hover: #4338ca;
+  --accent-light: #e0e7ff;
+  --success: #22c55e;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+  --border: #d1d5db;
+  --shadow: 0 4px 24px rgba(0,0,0,0.08);
+  --radius: 16px;
+  --radius-sm: 8px;
+}
+
+[data-theme='dark'] {
+  --bg: #0f0f14;
+  --surface: #1a1a24;
+  --surface-2: #24243a;
+  --text: #f0f0f8;
+  --text-muted: #8888aa;
+  --accent: #818cf8;
+  --accent-hover: #6366f1;
+  --accent-light: #1e1b4b;
+  --border: #2e2e45;
+  --shadow: 0 4px 24px rgba(0,0,0,0.4);
+}
+
+/* ─── Reset & Base ──────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  transition: background 0.3s, color 0.3s;
+  min-height: 100vh;
+}
+
+#app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ─── Layout ────────────────────────────────────── */
+.page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  flex: 1;
+}
+
+/* ─── Card ──────────────────────────────────────── */
+.card {
+  background: var(--surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 32px;
+  border: 1px solid var(--border);
+}
+
+/* ─── Buttons ───────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-radius: var(--radius-sm);
+  border: none;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover { background: var(--accent-hover); transform: translateY(-1px); }
+
+.btn-outline {
+  background: transparent;
+  border: 2px solid var(--border);
+  color: var(--text);
+}
+.btn-outline:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-danger { background: var(--danger); color: #fff; }
+.btn-danger:hover { opacity: 0.88; }
+
+.btn-success { background: var(--success); color: #fff; }
+.btn-success:hover { opacity: 0.88; }
+
+.btn-warning { background: var(--warning); color: #fff; }
+.btn-warning:hover { opacity: 0.88; }
+
+.btn-lg {
+  padding: 16px 36px;
+  font-size: 18px;
+  border-radius: var(--radius-sm);
+}
+
+/* ─── Timer display ─────────────────────────────── */
+.timer-display {
+  font-size: clamp(56px, 12vw, 96px);
+  font-weight: 700;
+  letter-spacing: -2px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+  text-align: center;
+  line-height: 1;
+}
+
+/* ─── Badge ─────────────────────────────────────── */
+.badge {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 99px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.badge-study  { background: var(--accent-light); color: var(--accent); }
+.badge-break  { background: #dcfce7; color: #166534; }
+[data-theme='dark'] .badge-break { background: #14532d; color: #86efac; }
+
+/* ─── Utility ───────────────────────────────────── */
+h1 { font-size: clamp(24px, 5vw, 36px); font-weight: 700; }
+h2 { font-size: 22px; font-weight: 700; }
+h3 { font-size: 17px; font-weight: 600; }
+.text-muted { color: var(--text-muted); }
+.text-center { text-align: center; }
+.mt-8  { margin-top: 8px; }
+.mt-16 { margin-top: 16px; }
+.mt-24 { margin-top: 24px; }
+.mt-32 { margin-top: 32px; }
+.gap-8  { gap: 8px; }
+.gap-16 { gap: 16px; }
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-center { justify-content: center; }
+.justify-between { justify-content: space-between; }
+.flex-wrap { flex-wrap: wrap; }
+.w-full { width: 100%; }
+
+input[type='number'] {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+  padding: 10px 14px;
+  font-size: 15px;
+  width: 100%;
+  transition: border-color 0.2s;
+}
+input[type='number']:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
