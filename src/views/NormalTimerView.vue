@@ -54,7 +54,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, onDeactivated, onActivated } from 'vue'
 import { RouterLink } from 'vue-router'
 import { useSessionsStore } from '../stores/session'
 
@@ -90,6 +90,7 @@ function formatSeconds(s) {
 }
 
 function startTick() {
+  clearInterval(interval)   // always clear before starting to prevent stacking
   interval = setInterval(() => elapsed.value++, 1000)
 }
 
@@ -124,6 +125,7 @@ function resumeStudy() {
   elapsed.value = 0
   phase.value = 'study'
   isRunning.value = true
+  stopTick()   // clear the break interval before starting a new one
   startTick()
 }
 
@@ -159,6 +161,16 @@ function endSession() {
 }
 
 onUnmounted(stopTick)
+
+// If this component is wrapped in <keep-alive>, onUnmounted won't fire on navigation.
+// onDeactivated stops the interval when the user navigates away, and onActivated
+// resumes it only if a timed phase was already running.
+onDeactivated(stopTick)
+onActivated(() => {
+  if (phase.value === 'study' || phase.value === 'break') {
+    startTick()
+  }
+})
 </script>
 
 <style scoped>

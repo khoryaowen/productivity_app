@@ -1,81 +1,53 @@
 <template>
   <div class="page">
+    <!-- Back nav -->
     <RouterLink to="/" class="back-link">← Home</RouterLink>
 
-    <!-- Setup form (shown before starting) -->
-    <div v-if="!sessionActive" class="card mt-24">
-      <h1>🍅 Pomodoro Timer</h1>
-      <p class="text-muted mt-8">Configure your focus and break intervals, then start.</p>
+    <div class="card mt-24 text-center">
+      <h1>Normal Timer</h1>
+      <p class="text-muted mt-8">Start to study. Pause to take a break. End to log the session.</p>
 
-      <div class="form-grid mt-24">
-        <div>
-          <label>Study Duration (min)</label>
-          <input v-model.number="config.studyMin" type="number" min="1" max="120" />
-        </div>
-        <div>
-          <label>Short Break (min)</label>
-          <input v-model.number="config.shortBreakMin" type="number" min="1" max="60" />
-        </div>
-        <div>
-          <label>Long Break (min)</label>
-          <input v-model.number="config.longBreakMin" type="number" min="1" max="60" />
-        </div>
-        <div>
-          <label>Pomodoros before long break</label>
-          <input v-model.number="config.longBreakAfter" type="number" min="1" max="10" />
-        </div>
+      <!-- Status badge -->
+      <div class="mt-24">
+        <span class="badge" :class="phase === 'study' ? 'badge-study' : 'badge-break'">
+          {{ phaseLabel }}
+        </span>
       </div>
 
-      <div class="mt-24 text-center">
-        <button class="btn btn-primary btn-lg" @click="startSession">▶ Start Session</button>
-      </div>
-    </div>
+      <!-- Timer display -->
+      <div class="timer-display mt-16">{{ formattedTime }}</div>
 
-    <!-- Active session -->
-    <div v-else class="card mt-24 text-center">
-      <div class="flex items-center justify-between">
-        <h1>🍅 Pomodoro</h1>
-        <span class="pomodoro-count">{{ pomodorosCompleted }} 🍅 done</span>
-      </div>
-
-      <!-- Phase badge -->
-      <div class="mt-16">
-        <span class="badge" :class="phaseBadgeClass">{{ phaseLabel }}</span>
-      </div>
-
-      <!-- Ring timer -->
-      <div class="ring-wrapper mt-16">
-        <svg class="ring" viewBox="0 0 120 120">
-          <circle class="ring-bg" cx="60" cy="60" r="52" />
-          <circle
-            class="ring-progress"
-            cx="60" cy="60" r="52"
-            :stroke-dasharray="circumference"
-            :stroke-dashoffset="dashOffset"
-          />
-        </svg>
-        <div class="ring-time">{{ formattedTime }}</div>
+      <!-- Session breakdown -->
+      <div v-if="studyTotal > 0 || breakTotal > 0" class="breakdown mt-16">
+        <span>📖 Study: <strong>{{ formatSeconds(studyTotal) }}</strong></span>
+        <span>☕ Break: <strong>{{ formatSeconds(breakTotal) }}</strong></span>
       </div>
 
       <!-- Controls -->
       <div class="controls mt-24">
-        <button v-if="!isRunning" class="btn btn-primary btn-lg" @click="resumeTick">▶ Resume</button>
-        <button v-else class="btn btn-warning btn-lg" @click="pauseTick">⏸ Pause</button>
-        <button class="btn btn-outline btn-lg" @click="skipPhase">⏭ Skip</button>
-        <button class="btn btn-danger btn-lg" @click="endSession">■ End Session</button>
-      </div>
+        <!-- Not started -->
+        <template v-if="!isRunning && phase === 'idle'">
+          <button class="btn btn-primary btn-lg" @click="startStudy">▶ Start Studying</button>
+        </template>
 
-      <!-- Session summary -->
-      <div class="breakdown mt-24">
-        <span>📖 Study: <strong>{{ formatSeconds(totalStudy) }}</strong></span>
-        <span>☕ Break: <strong>{{ formatSeconds(totalBreak) }}</strong></span>
+        <!-- Actively studying -->
+        <template v-else-if="isRunning && phase === 'study'">
+          <button class="btn btn-warning btn-lg" @click="pauseForBreak">⏸ Pause (Break)</button>
+          <button class="btn btn-danger btn-lg" @click="endSession">■ End Session</button>
+        </template>
+
+        <!-- On break (paused) -->
+        <template v-else-if="!isRunning && phase === 'break'">
+          <button class="btn btn-primary btn-lg" @click="resumeStudy">▶ Resume Studying</button>
+          <button class="btn btn-danger btn-lg" @click="endSession">■ End Session</button>
+        </template>
       </div>
     </div>
 
-    <!-- Saved notification -->
+    <!-- Saved confirmation -->
     <Transition name="fade">
       <div v-if="savedMsg" class="save-msg card mt-16">
-        ✅ Session saved! {{ savedMsg.pomodoros }} pomodoro(s) | Study: {{ savedMsg.study }}
+        ✅ Session saved! Study: {{ savedMsg.study }} | Break: {{ savedMsg.brk }}
       </div>
     </Transition>
   </div>
@@ -88,154 +60,107 @@ import { useSessionsStore } from '../stores/session'
 
 const store = useSessionsStore()
 
-// ── Config ────────────────────────────────────────
-const config = ref({
-  studyMin: 25,
-  shortBreakMin: 5,
-  longBreakMin: 15,
-  longBreakAfter: 4,
-})
-
-// ── Session state ─────────────────────────────────
-const sessionActive     = ref(false)
-const phase             = ref('study')   // 'study' | 'shortBreak' | 'longBreak'
-const isRunning         = ref(false)
-const elapsed           = ref(0)         // seconds into current phase
-const pomodorosCompleted = ref(0)
-const totalStudy        = ref(0)
-const totalBreak        = ref(0)
-const savedMsg          = ref(null)
+// ── State ─────────────────────────────────────────
+const phase     = ref('idle')   // 'idle' | 'study' | 'break'
+const isRunning = ref(false)
+const elapsed   = ref(0)        // seconds ticking in current phase
+const studyTotal = ref(0)
+const breakTotal = ref(0)
+const savedMsg  = ref(null)
 
 let interval = null
 
-// ── Ring geometry ─────────────────────────────────
-const circumference = 2 * Math.PI * 52  // r=52
-
-const phaseDuration = computed(() => {
-  if (phase.value === 'study')      return config.value.studyMin * 60
-  if (phase.value === 'shortBreak') return config.value.shortBreakMin * 60
-  return config.value.longBreakMin * 60
-})
-
-const dashOffset = computed(() => {
-  const ratio = Math.max(0, 1 - elapsed.value / phaseDuration.value)
-  return circumference * ratio
-})
-
-const formattedTime = computed(() => {
-  const remaining = Math.max(0, phaseDuration.value - elapsed.value)
-  return formatSeconds(remaining)
-})
+// ── Computed ──────────────────────────────────────
+const formattedTime = computed(() => formatSeconds(elapsed.value))
 
 const phaseLabel = computed(() => ({
-  study: 'Focus Time',
-  shortBreak: 'Short Break',
-  longBreak: 'Long Break',
-}[phase.value]))
-
-const phaseBadgeClass = computed(() => ({
-  study: 'badge-study',
-  shortBreak: 'badge-break',
-  longBreak: 'badge-break',
+  idle: 'Not started',
+  study: 'Studying',
+  break: 'On Break',
 }[phase.value]))
 
 // ── Helpers ───────────────────────────────────────
 function formatSeconds(s) {
-  const m = Math.floor(s / 60)
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
   const sec = s % 60
-  return `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
-}
-
-function startSession() {
-  sessionActive.value = true
-  phase.value = 'study'
-  elapsed.value = 0
-  pomodorosCompleted.value = 0
-  totalStudy.value = 0
-  totalBreak.value = 0
-  isRunning.value = true
-  startTick()
+  return h > 0
+    ? `${h}:${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
+    : `${String(m).padStart(2,'0')}:${String(sec).padStart(2,'0')}`
 }
 
 function startTick() {
-  interval = setInterval(tick, 1000)
+  clearInterval(interval)   // always clear before starting to prevent stacking
+  interval = setInterval(() => elapsed.value++, 1000)
 }
 
-function resumeTick() {
+function stopTick() {
+  clearInterval(interval)
+  interval = null
+}
+
+// ── Actions ───────────────────────────────────────
+function startStudy() {
+  phase.value = 'study'
   isRunning.value = true
+  elapsed.value = 0
   startTick()
 }
 
-function pauseTick() {
-  isRunning.value = false
-  clearInterval(interval)
-}
-
-function tick() {
-  elapsed.value++
-  if (elapsed.value >= phaseDuration.value) {
-    advancePhase()
-  }
-}
-
-function advancePhase(manual = false) {
-  clearInterval(interval)
-  interval = null
-
-  if (phase.value === 'study') {
-    totalStudy.value += elapsed.value
-    pomodorosCompleted.value++
-    const isLongBreak = pomodorosCompleted.value % config.value.longBreakAfter === 0
-    phase.value = isLongBreak ? 'longBreak' : 'shortBreak'
-  } else {
-    totalBreak.value += elapsed.value
-    phase.value = 'study'
-  }
-
+function pauseForBreak() {
+  // Commit study time
+  studyTotal.value += elapsed.value
   elapsed.value = 0
-
-  if (!manual) {
-    // Auto-continue
-    isRunning.value = true
-    startTick()
-  } else {
-    isRunning.value = false
-  }
+  isRunning.value = false
+  phase.value = 'break'
+  stopTick()
+  // Auto-start break timer
+  startTick()
+  isRunning.value = false // break is "paused" from study perspective
 }
 
-function skipPhase() {
-  advancePhase(false)
+function resumeStudy() {
+  // Commit break time
+  breakTotal.value += elapsed.value
+  elapsed.value = 0
+  phase.value = 'study'
+  isRunning.value = true
+  stopTick()   // clear the break interval before starting a new one
+  startTick()
 }
 
 function endSession() {
-  clearInterval(interval)
-  interval = null
+  stopTick()
 
-  // Commit partial phase
-  if (phase.value === 'study') totalStudy.value += elapsed.value
-  else totalBreak.value += elapsed.value
+  // Commit whichever phase was active
+  if (phase.value === 'study') {
+    studyTotal.value += elapsed.value
+  } else if (phase.value === 'break') {
+    breakTotal.value += elapsed.value
+  }
 
-  if (totalStudy.value > 0) {
+  if (studyTotal.value > 0) {
     store.addSession({
-      studyDuration: totalStudy.value,
-      breakDuration: totalBreak.value,
-      type: 'pomodoro',
-      completedPomodoros: pomodorosCompleted.value,
+      studyDuration: studyTotal.value,
+      breakDuration: breakTotal.value,
+      type: 'normal',
     })
     savedMsg.value = {
-      study: formatSeconds(totalStudy.value),
-      pomodoros: pomodorosCompleted.value,
+      study: formatSeconds(studyTotal.value),
+      brk: formatSeconds(breakTotal.value),
     }
     setTimeout(() => (savedMsg.value = null), 5000)
   }
 
   // Reset
-  sessionActive.value = false
+  phase.value = 'idle'
   isRunning.value = false
   elapsed.value = 0
+  studyTotal.value = 0
+  breakTotal.value = 0
 }
 
-onUnmounted(() => clearInterval(interval))
+onUnmounted(stopTick)
 </script>
 
 <style scoped>
@@ -249,55 +174,6 @@ onUnmounted(() => clearInterval(interval))
   transition: color 0.2s;
 }
 .back-link:hover { color: var(--accent); }
-
-.form-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 16px;
-}
-@media (max-width: 480px) { .form-grid { grid-template-columns: 1fr; } }
-
-.pomodoro-count {
-  font-size: 14px;
-  font-weight: 700;
-  color: var(--text-muted);
-}
-
-/* ── Ring ── */
-.ring-wrapper {
-  position: relative;
-  width: 200px;
-  height: 200px;
-  margin: 0 auto;
-}
-
-.ring { transform: rotate(-90deg); width: 100%; height: 100%; }
-
-.ring-bg {
-  fill: none;
-  stroke: var(--surface-2);
-  stroke-width: 10;
-}
-
-.ring-progress {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 10;
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.9s linear;
-}
-
-.ring-time {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 36px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
-}
 
 .controls {
   display: flex;
@@ -315,8 +191,10 @@ onUnmounted(() => clearInterval(interval))
 }
 
 .save-msg {
-  text-align: center;
+  background: var(--surface);
+  color: var(--text);
   font-weight: 600;
+  text-align: center;
 }
 
 .fade-enter-active, .fade-leave-active { transition: opacity 0.4s; }
